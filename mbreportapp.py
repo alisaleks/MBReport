@@ -37,10 +37,10 @@ def load_and_process_data():
 
     # Add a column mapping Area Code 304 and 109 as specified
     area_mapping = {
-        '304': '304-Area 30 Tamara Fuente',
-        '109': '109-Area 7 Eleonora Armonici',
-        '209': '209-Area 17 Jesus Tena',
-        '402': '402-Area 45 Lorena Exposito'
+        '304': 'A17 TAMARA FUENTE',
+        '109': 'A07 ELEONORA ARMONICI',
+        '209': 'A21 JESUS TENA',
+        '402': 'A34 LORENA EXPOSITO'
     }
     df['Areas'] = df['Shop[Area Code]'].map(area_mapping).fillna('Other Areas')
 
@@ -264,3 +264,33 @@ with tab3:
     selected_area_managers = st.multiselect('Select Area Managers', area_managers, default=default_area_managers, key='area_managers')
     
     create_shop_details_pivot(df, selected_weeks, selected_area_managers)
+
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import plotly.express as px
+import plotly.graph_objects as go
+import warnings
+import io
+from io import BytesIO
+
+# Suppress specific warnings from openpyxl
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
+# Function to process the data
+columns_to_string = {
+    'Customer[Customer Code]': str,
+    'Customer Lifecycle History[Customer Type Descr]': str,
+    'Customer Lifecycle History[Customer Type Group]': str,
+    'Shop[Shop Code - Descr]': str,
+    'Shop[Area Manager]': str,
+    'Medical Channel[Mediatype Group Descr]': str,
+    'Shop[Area Code]': str,
+    'Service Appointment[Service Category Descr]': str,
+}
+df = pd.read_excel('mbreport_query_new.xlsx', dtype=columns_to_string)
+df.columns = [col if not col.startswith('[') else col.strip('[]') for col in df.columns]
+df.rename(columns={'Calendar[ISO Week]': 'ISO Week'}, inplace=True)
+df.head()

@@ -12,14 +12,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      
+
       - name: Check for changes
+        id: check_changes
         run: |
           git fetch
-          git diff --exit-code mbreport_query_new.xlsx || echo "File has changed."
+          git diff --quiet mbreport_query_new.xlsx || echo "File has changed."
+        continue-on-error: true  # Allow the workflow to continue even if no changes are detected
 
       - name: Commit and push changes
-        if: ${{ success() }}
+        if: steps.check_changes.outcome == 'success'  # Proceed only if changes are detected
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -30,5 +32,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: No changes found
-        if: failure()  # If no changes, this step runs
+        if: steps.check_changes.outcome != 'success'  # If no changes are detected, this step runs
         run: echo "No changes detected, skipping commit."
