@@ -34,7 +34,7 @@ def load_and_process_data():
     start_date = start_date - timedelta(days=start_date.weekday())
     end_date = now + timedelta(days=6 - now.weekday())
     df = df[(df['Calendar[Date]'] >= start_date) & (df['Calendar[Date]'] <= end_date)]
-
+    
     # Add a column mapping Area Code 304 and 109 as specified
     area_mapping = {
         '304': 'A17 TAMARA FUENTE',
@@ -57,12 +57,12 @@ def load_and_process_data():
     df['All Appointments'] = df.apply(lambda row: row['FP_ALL_Appointments'] / unique_other_areas if row['Areas'] == 'Other Areas' else row['FP_ALL_Appointments'], axis=1)
     df['Total_Appointments'] = df['Agenda_Appointments__Heads_'] + df['Appointments_Cancelled']
     df['Total Appointments'] = df.apply(lambda row: ((row['Agenda_Appointments__Heads_'] + row['Appointments_Cancelled']) / unique_other_areas if (row['Agenda_Appointments__Heads_'] + row['Appointments_Cancelled']) != 0 else 0) if row['Areas'] == 'Other Areas' else row['Agenda_Appointments__Heads_'] + row['Appointments_Cancelled'], axis=1)
-    
-    df['Appointment to test: Conversion rate'] = df['Opportunity Test'] / df['Agenda Appointments']
-    df['Appointment to trial: Conversion rate'] = df['Net Trial Activated'] / df['Agenda Appointments']
+    df['Appointment to test: Conversion rate'] = np.where(df['Agenda Appointments'] != 0, df['Opportunity Test'] / df['Agenda Appointments'], 0)
+    df['Appointment to trial: Conversion rate'] = np.where(df['Agenda Appointments'] != 0, df['Net Trial Activated'] / df['Agenda Appointments'], 0)    
     df['Cancellation rate'] = df['Appointments Cancelled'] / (df['Appointments Cancelled'] + df['Agenda Appointments'])
     df['Reschedule rate'] = df['Appointments Rescheduled'] / df['All Appointments']
     df['Show rate'] = df['Appointments Completed'] / df['Agenda Appointments']
+    df['Appointment to trial: Conversion rate'] = np.where(df['Agenda Appointments'] != 0, df['Net Trial Activated'] / df['Agenda Appointments'], 0)    
 
     return df
 
@@ -176,7 +176,7 @@ def create_timeseries_visualizations(df, selected_metric):
         area_data = timeseries_data[timeseries_data['Areas'] == area]
         fig.add_trace(go.Scatter(
             x=area_data['ISO Week'], 
-            y=area_data[selected_metric], 
+            y=area_data[selected_metric] * 100 if 'rate' in selected_metric else area_data[selected_metric], 
             mode='lines+markers', 
             name=f"{selected_metric} - {area}", 
             text=area_data[selected_metric].apply(lambda x: f"{x:,.0f}"),
@@ -184,10 +184,12 @@ def create_timeseries_visualizations(df, selected_metric):
             hovertemplate=f'{selected_metric}: %{{y:,.0f}}<extra></extra>'  # Correctly format hovertemplate as a raw string
         ))
 
+
     fig.update_layout(
         title='Time Series of Selected Metric by Area', 
         xaxis_title='ISO Week', 
         yaxis_title='Value', 
+        yaxis_ticksuffix="%",
         hovermode='x unified'
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -240,12 +242,28 @@ with tab1:
     if st.button('Update Data'):
         df = load_and_process_data()
         st.write("Data Updated Successfully")
-    
-    iso_weeks = df['ISO Week'].unique()
-    selected_weeks = st.multiselect('Select ISO Weeks', iso_weeks, default=[iso_weeks[-2]], key='overview_iso_weeks')
+
+    # Sort ISO weeks for display
+    df['ISO Week'] = df['ISO Week'].astype(int)  # Ensure ISO Week is numeric for sorting
+    iso_weeks = sorted(df['ISO Week'].unique())  # Sort ISO weeks
     months = df['Calendar[Date]'].dt.month_name().unique()
+
+    # Filter ISO weeks based on the selected month
     selected_month = st.selectbox('Select Month', months, key='overview_month')
-    
+    if selected_month:
+        filtered_iso_weeks = df[df['Calendar[Date]'].dt.month_name() == selected_month]['ISO Week'].unique()
+        filtered_iso_weeks = sorted(filtered_iso_weeks)
+    else:
+        filtered_iso_weeks = iso_weeks  # Show all ISO weeks if no month is selected
+
+    # Display sorted and filtered ISO weeks
+    selected_weeks = st.multiselect('Select ISO Weeks', filtered_iso_weeks, default=[filtered_iso_weeks[-2]], key='overview_iso_weeks')
+
+    # Filter months by selected ISO weeks (vice versa filtering)
+    if selected_weeks:
+        filtered_months = df[df['ISO Week'].isin(selected_weeks)]['Calendar[Date]'].dt.month_name().unique()
+        selected_month = st.selectbox('Filter Month by Selected Weeks', filtered_months, key='filtered_months')
+
     create_overview_table(df, selected_weeks)
     create_overview_visualizations(df, selected_weeks)
 
@@ -257,40 +275,10 @@ with tab2:
     create_timeseries_visualizations(df, selected_metric)
 
 with tab3:
-    iso_weeks = df['ISO Week'].unique()
+    iso_weeks = sorted(df['ISO Week'].unique())  # Sort ISO weeks
     selected_weeks = st.multiselect('Select ISO Weeks', iso_weeks, default=[iso_weeks[-2]], key='shop_iso_weeks')
     area_managers = df['Shop[Area Manager]'].unique()
     default_area_managers = ['Tamara Fuente', 'Eleonora Armonici', 'Lorena Exposito', 'Jesus Tena']
     selected_area_managers = st.multiselect('Select Area Managers', area_managers, default=default_area_managers, key='area_managers')
     
     create_shop_details_pivot(df, selected_weeks, selected_area_managers)
-
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import plotly.express as px
-import plotly.graph_objects as go
-import warnings
-import io
-from io import BytesIO
-
-# Suppress specific warnings from openpyxl
-warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
-
-# Function to process the data
-columns_to_string = {
-    'Customer[Customer Code]': str,
-    'Customer Lifecycle History[Customer Type Descr]': str,
-    'Customer Lifecycle History[Customer Type Group]': str,
-    'Shop[Shop Code - Descr]': str,
-    'Shop[Area Manager]': str,
-    'Medical Channel[Mediatype Group Descr]': str,
-    'Shop[Area Code]': str,
-    'Service Appointment[Service Category Descr]': str,
-}
-df = pd.read_excel('mbreport_query_new.xlsx', dtype=columns_to_string)
-df.columns = [col if not col.startswith('[') else col.strip('[]') for col in df.columns]
-df.rename(columns={'Calendar[ISO Week]': 'ISO Week'}, inplace=True)
-df.head()
