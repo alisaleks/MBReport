@@ -155,6 +155,16 @@ def create_overview_visualizations(df, selected_weeks):
 # Function to create visualizations for the timeseries tab
 def create_timeseries_visualizations(df, selected_metric):
     st.subheader("Time Series Data")
+ 
+    # Define metrics that are rates
+    rate_metrics = [
+        'Appointment to test: Conversion rate',
+        'Appointment to trial: Conversion rate',
+        'Cancellation rate',
+        'Reschedule rate',
+        'Show rate'
+    ]
+    # Group the data by ISO Week and Areas and aggregate
     timeseries_data = df.groupby(['ISO Week', 'Areas']).agg({
         'All Appointments': 'sum',
         'Total Appointments': 'sum',
@@ -170,30 +180,31 @@ def create_timeseries_visualizations(df, selected_metric):
         'Reschedule rate': 'mean',
         'Show rate': 'mean'
     }).reset_index()
-
+ 
     fig = go.Figure()
     for area in timeseries_data['Areas'].unique():
         area_data = timeseries_data[timeseries_data['Areas'] == area]
+        y_values = area_data[selected_metric] * 100 if selected_metric in rate_metrics else area_data[selected_metric]
         fig.add_trace(go.Scatter(
-            x=area_data['ISO Week'], 
-            y=area_data[selected_metric] * 100 if 'rate' in selected_metric else area_data[selected_metric], 
-            mode='lines+markers', 
-            name=f"{selected_metric} - {area}", 
-            text=area_data[selected_metric].apply(lambda x: f"{x:,.0f}"),
+            x=area_data['ISO Week'],
+            y=y_values,
+            mode='lines+markers',
+            name=f"{selected_metric} - {area}",
+            text=area_data[selected_metric].apply(lambda x: f"{x:,.0f}" if selected_metric not in rate_metrics else f"{x:.1%}"),
             textposition='bottom center',
-            hovertemplate=f'{selected_metric}: %{{y:,.0f}}<extra></extra>'  # Correctly format hovertemplate as a raw string
+            hovertemplate=f'{selected_metric}: %{{y:,.0f}}<extra></extra>'
         ))
-
-
+ 
+    # Set the y-axis tick suffix based on the metric type
+    yaxis_suffix = "%" if selected_metric in rate_metrics else ""
     fig.update_layout(
-        title='Time Series of Selected Metric by Area', 
-        xaxis_title='ISO Week', 
-        yaxis_title='Value', 
-        yaxis_ticksuffix="%",
+        title='Time Series of Selected Metric by Area',
+        xaxis_title='ISO Week',
+        yaxis_title='Value',
+        yaxis_ticksuffix=yaxis_suffix,
         hovermode='x unified'
     )
     st.plotly_chart(fig, use_container_width=True)
-
 
 
 # Function to create shop details pivot table
