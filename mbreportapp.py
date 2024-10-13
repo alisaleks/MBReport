@@ -246,24 +246,32 @@ with tab1:
     # Sort ISO weeks for display
     df['ISO Week'] = df['ISO Week'].astype(int)  # Ensure ISO Week is numeric for sorting
     iso_weeks = sorted(df['ISO Week'].unique())  # Sort ISO weeks
+   # Ensure months are sorted chronologically and add an "All" option
     months = df['Calendar[Date]'].dt.month_name().unique()
-
-    # Filter ISO weeks based on the selected month
-    selected_month = st.selectbox('Select Month', months, key='overview_month')
-    if selected_month:
-        filtered_iso_weeks = df[df['Calendar[Date]'].dt.month_name() == selected_month]['ISO Week'].unique()
-        filtered_iso_weeks = sorted(filtered_iso_weeks)
+    month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    months_sorted = ["All"] + sorted(months, key=lambda x: month_order.index(x))
+    
+    # Month multi-selection with "All" option
+    selected_months = st.multiselect('Select Month(s)', months_sorted, default=["All"], key='overview_month')
+    
+    # Check if "All" is selected
+    if "All" in selected_months:
+        filtered_iso_weeks = iso_weeks  # Show all ISO weeks if "All" is selected
     else:
-        filtered_iso_weeks = iso_weeks  # Show all ISO weeks if no month is selected
-
-    # Display sorted and filtered ISO weeks
-    selected_weeks = st.multiselect('Select ISO Weeks', filtered_iso_weeks, default=[filtered_iso_weeks[-2]], key='overview_iso_weeks')
-
-    # Filter months by selected ISO weeks (vice versa filtering)
-    if selected_weeks:
-        filtered_months = df[df['ISO Week'].isin(selected_weeks)]['Calendar[Date]'].dt.month_name().unique()
-        selected_month = st.selectbox('Filter Month by Selected Weeks', filtered_months, key='filtered_months')
-
+        # Filter ISO weeks for the selected months only
+        filtered_iso_weeks = df[df['Calendar[Date]'].dt.month_name().isin(selected_months)]['ISO Week'].unique()
+        filtered_iso_weeks = sorted(filtered_iso_weeks)
+    
+    # Add "All" option for ISO weeks
+    iso_weeks_with_all = ["All"] + filtered_iso_weeks
+    
+    # ISO week multi-selection with "All" option
+    selected_weeks = st.multiselect('Select ISO Weeks', options=iso_weeks_with_all, default="All", key='overview_iso_weeks')
+ 
+    # Check if "All" is selected for ISO weeks
+    if "All" in selected_weeks:
+        selected_weeks = filtered_iso_weeks  # Include all filtered weeks if "All" is selected
+        
     create_overview_table(df, selected_weeks)
     create_overview_visualizations(df, selected_weeks)
 
